@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<title>Browsing</title>
+<meta http-equiv="Content-Type" content="text/html;charset=UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<style>
+    /* {} */
+    main, nav {
+        display: grid;
+        grid-template-columns: auto;
+    }
+
+    .image > img {
+        max-height: 100%;
+        max-width: 100%;
+    }
+
+    .image {
+        display: flex;
+        justify-content: center;
+    }
+
+    .directory {
+        padding: 1rem;
+        margin: .1rem;
+        display: flex;
+        align-items: center;
+        text-decoration: none;
+    }
+
+    .directory:hover {
+        background-color: #eee;
+    }
+
+    .directory .folder-icon {
+        width: 1rem;
+        height: 1rem;
+    }
+
+    .directory .folder-title {
+        margin-left: 1rem;
+        color: #333;
+    }
+</style>
+
+<body>
+    <h2>Browsing right now</h2>
+
+    <nav id="directory-container">
+        <div>
+            <button id="btn-share">Share folder</button>
+            <button onclick="document.getElementById('container').style.gridTemplateColumns = 'auto'">
+                1 Row Mode
+            </button>
+            <button onclick="document.getElementById('container').style.gridTemplateColumns = 'auto auto'">
+                2 Row Mode
+            </button>
+            <button onclick="document.getElementById('container').style.gridTemplateColumns = 'auto auto auto'">
+                3 Row Mode
+            </button>
+            <button onclick="document.getElementById('container').style.gridTemplateColumns = 'auto auto auto auto'">
+                4 Row Mode
+            </button>
+        </div>
+    </nav>
+
+    <main id="container"></main>
+
+    <script>
+        // {} []
+        let path = ""
+        let images = []
+        let batch = 0
+        let batch_size = 24
+        let wait = false
+
+        // Todo: make batch loading a thing to not go all out on the server
+        function load_batch() {
+            for (let i = batch * batch_size; i < (batch + 1) * batch_size && i < images.length; i++) {
+                const entry = document.createElement("div")
+                entry.innerHTML = `
+                    <div class="image">
+                        <img src="/api/image/small?path=${path + '/' + images[i]}" />
+                    </div>`
+                
+                document.getElementById("container").appendChild(entry)
+            }
+
+            batch++
+        }
+
+        function make_dir_link(link, title) {
+            const dir_el = document.createElement('a')
+            dir_el.href = link
+            dir_el.classList.add("directory")
+
+            dir_el.innerHTML = `
+                <img class="folder-icon" src="/some_funky_dir_icon.png" />
+                <span class="folder-title">${title}</span>`
+
+            return dir_el
+        }
+
+        async function load_images() {
+            const res_raw = await fetch('/api/list' + window.location.search)
+            const res = await res_raw.json()
+
+            images = res.images
+            path = res.path
+
+            // load folder structure
+            const base_path = `${window.location.origin + window.location.pathname}?path=`
+
+            let back_link = make_dir_link(base_path + res.path.replace(/([^\/]*)\/*$/, ''))
+            document.getElementById("directory-container")
+                .appendChild(make_dir_link(back_link, '..'))
+
+            res.directories.forEach(dir => {
+                const link = `${base_path}${res.path}/${dir}`
+
+                document.getElementById("directory-container")
+                    .appendChild(make_dir_link(link, dir))
+            })
+            
+            // load initial batch 
+            load_batch()
+        }
+
+        // event when scrolled to the bottom, used to load next image batch
+        document.body.onscroll = e => {
+            if (window.innerHeight + window.pageYOffset >= document.body.offsetHeight) {
+                
+                if (wait == false) {
+                    load_batch()
+                    console.log('load next batch')
+                }
+
+                // rate limiter
+                wait = true
+                setTimeout(() => {wait = false}, 2000)
+            }
+        }
+
+        load_images()
+    </script>
+
+    <script>
+        // share functionality
+        document.getElementById("btn-share").onclick = async e => {
+            // const res = await fetch('/api/share?path=' + path, {method: 'POST'})
+            alert("fetching link for: " + '/api/share?path=' + path)
+            prompt("Link to share:", 'example.com/shared/' + 'some-id-no-one-knows')
+        }
+    </script>
+</body>
